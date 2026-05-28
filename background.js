@@ -1,5 +1,4 @@
-import OBR from "https://esm.sh/@owlbear-rodeo/sdk";
-
+// 后台脚本：直接在 Owlbear 沙箱中运行，OBR 已全局注入，无需 import
 OBR.onReady(() => {
   OBR.scene.canvas.draw((ctx, viewport) => {
     OBR.scene.items.getItems().then((items) => {
@@ -24,6 +23,7 @@ OBR.onReady(() => {
     });
   });
 
+  // 圆角矩形辅助函数
   function drawRoundRect(ctx, x, y, w, h, r) {
     ctx.beginPath();
     ctx.moveTo(x + r, y);

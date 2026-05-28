@@ -6,12 +6,15 @@
     body { font-family: sans-serif; margin: 10px; background: #2f3437; color: #fff; }
     .section { margin-bottom: 15px; }
     .section h3 { margin: 5px 0; }
-    .item { background: #3a3f44; padding: 5px 8px; margin: 4px 0; border-radius: 4px; display: flex; justify-content: space-between; align-items: center; }
+    .item { background: #3a3f44; padding: 5px 8px; margin: 4px 0; border-radius: 4px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; }
     .delete-btn { background: #d9534f; border: none; color: white; padding: 2px 8px; border-radius: 3px; cursor: pointer; }
     .add-form { display: flex; gap: 5px; margin-top: 5px; }
     .add-form input { flex: 1; padding: 4px; border-radius: 3px; border: 1px solid #555; background: #1e1e1e; color: #fff; }
     .add-form button { background: #5cb85c; border: none; color: white; padding: 4px 10px; border-radius: 3px; cursor: pointer; }
     .no-token { color: #888; font-style: italic; }
+    .offset-control { display: flex; gap: 4px; margin-left: auto; }
+    .offset-control input { width: 40px; padding: 2px; border-radius: 3px; border: 1px solid #555; background: #1e1e1e; color: #fff; text-align: center; }
+    .offset-btn { background: #5bc0de; border: none; color: white; padding: 2px 6px; border-radius: 3px; cursor: pointer; font-size: 0.9em; }
   </style>
 </head>
 <body>
@@ -119,6 +122,10 @@
         statusesListEl.innerHTML = labels.statuses.map((status, i) => `
           <div class="item">
             <span>${escapeHtml(formatStatus(status))}</span>
+            <div class="offset-control">
+              <input type="number" id="offset-${i}" value="0" placeholder="-2">
+              <button class="offset-btn" data-index="${i}">偏移</button>
+            </div>
             <button class="delete-btn" data-type="status" data-index="${i}">删除</button>
           </div>
         `).join('');
@@ -137,15 +144,15 @@
         return div.innerHTML;
       }
 
-      // 修复后的删除函数
+      // 全局点击监听，处理删除和偏移
       document.body.addEventListener('click', async (e) => {
+        // 删除按钮
         if (e.target.classList.contains('delete-btn')) {
           const type = e.target.dataset.type;
           const index = parseInt(e.target.dataset.index);
           const token = await getSelectedToken();
           if (!token) return;
           const labels = getCustomLabels(token);
-          // 正确映射数组名：tag -> tags, status -> statuses, power -> powers
           const arrayMap = { tag: 'tags', status: 'statuses', power: 'powers' };
           const arrayName = arrayMap[type];
           if (!arrayName) return;
@@ -153,8 +160,38 @@
           await saveCustomLabels(token, labels);
           refreshPanel();
         }
+
+        // 偏移按钮
+        if (e.target.classList.contains('offset-btn')) {
+          const index = parseInt(e.target.dataset.index);
+          const offsetInput = document.getElementById(`offset-${index}`);
+          const delta = parseInt(offsetInput.value);
+          if (isNaN(delta)) return alert('请输入有效的整数偏移量');
+          const token = await getSelectedToken();
+          if (!token) return;
+          const labels = getCustomLabels(token);
+          const status = labels.statuses[index];
+          if (!status) return;
+
+          // 对每个等级应用偏移
+          const newLevels = status.levels.map(l => l + delta)
+            .filter(l => l >= 1 && l <= 7);
+          
+          // 如果偏移后没有任何有效等级，删除该状态
+          if (newLevels.length === 0) {
+            labels.statuses.splice(index, 1);
+          } else {
+            // 去重排序
+            const uniqueLevels = [...new Set(newLevels)].sort((a,b) => a-b);
+            status.levels = uniqueLevels;
+          }
+          
+          await saveCustomLabels(token, labels);
+          refreshPanel();
+        }
       });
 
+      // 添加标签
       document.getElementById('add-tag-btn').onclick = async () => {
         const token = await getSelectedToken();
         if (!token) return alert('请先选中一个 token');
@@ -167,6 +204,7 @@
         refreshPanel();
       };
 
+      // 添加状态
       document.getElementById('add-status-btn').onclick = async () => {
         const token = await getSelectedToken();
         if (!token) return alert('请先选中一个 token');
@@ -195,6 +233,7 @@
         refreshPanel();
       };
 
+      // 添加威能
       document.getElementById('add-power-btn').onclick = async () => {
         const token = await getSelectedToken();
         if (!token) return alert('请先选中一个 token');

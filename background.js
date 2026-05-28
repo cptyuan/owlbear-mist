@@ -1,6 +1,9 @@
-// 后台脚本：直接在 Owlbear 沙箱中运行，OBR 已全局注入，无需 import
+// 后台绘制脚本（直接使用全局 OBR，无 import）
 OBR.onReady(() => {
+  console.log('✅ 后台脚本已启动');
+
   OBR.scene.canvas.draw((ctx, viewport) => {
+    // 获取所有物品，筛选角色和坐骑
     OBR.scene.items.getItems().then((items) => {
       const tokens = items.filter(item => item.layer === 'CHARACTER' || item.layer === 'MOUNT');
       
@@ -8,6 +11,7 @@ OBR.onReady(() => {
         const labels = token.metadata?.['com.cptyuan.token-labels'];
         if (!labels) continue;
 
+        // 计算屏幕坐标
         const { x: tokenX, y: tokenY } = token.position;
         const tokenWidth = token.size.width;
         const tokenHeight = token.size.height;
@@ -16,14 +20,15 @@ OBR.onReady(() => {
         const screenW = tokenWidth * viewport.scale;
         const screenH = tokenHeight * viewport.scale;
 
+        // 绘制三种标注
         drawLabels(ctx, labels.tags, '#FF9800', screenX, screenY, screenW, screenH, viewport.scale);
         drawStatuses(ctx, labels.statuses, '#8BC34A', screenX, screenY, screenW, screenH, viewport.scale);
         drawPowers(ctx, labels.powers, '#9C27B0', screenX, screenY, screenW, screenH, viewport.scale);
       }
-    });
+    }).catch(e => console.error('获取物品失败:', e));
   });
 
-  // 圆角矩形辅助函数
+  // ---------- 绘制辅助函数 ----------
   function drawRoundRect(ctx, x, y, w, h, r) {
     ctx.beginPath();
     ctx.moveTo(x + r, y);

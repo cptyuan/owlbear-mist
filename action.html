@@ -45,10 +45,11 @@
     </div>
   </div>
 
-  <script src="https://esm.sh/@owlbear-rodeo/sdk@1.12.0"></script>
   <script>
+    // OBR 由平台自动注入，直接使用
     (async () => {
       try {
+        // 等待就绪
         await OBR.onReady();
         console.log('✅ OBR SDK 已就绪');
 
@@ -57,11 +58,9 @@
         const statusesListEl = document.getElementById('statuses-list');
         const powersListEl = document.getElementById('powers-list');
 
-        // 获取当前选中的第一个 token（角色或坐骑）
         async function getSelectedToken() {
           const selection = await OBR.player.getSelection();
           if (selection && selection.length > 0) {
-            // 直接返回第一个 item，它已包含 id, name, metadata 等
             return selection[0];
           }
           return null;
@@ -119,7 +118,6 @@
           return div.innerHTML;
         }
 
-        // 添加标签
         document.getElementById('add-tag-btn').onclick = async () => {
           const token = await getSelectedToken();
           if (!token) return alert('请先在画布上选中一个 token');
@@ -132,7 +130,6 @@
           refreshPanel();
         };
 
-        // 添加状态
         document.getElementById('add-status-btn').onclick = async () => {
           const token = await getSelectedToken();
           if (!token) return alert('请先在画布上选中一个 token');
@@ -155,7 +152,6 @@
           refreshPanel();
         };
 
-        // 添加威能
         document.getElementById('add-power-btn').onclick = async () => {
           const token = await getSelectedToken();
           if (!token) return alert('请先在画布上选中一个 token');
@@ -170,7 +166,6 @@
           refreshPanel();
         };
 
-        // 删除
         document.body.addEventListener('click', async (e) => {
           if (e.target.classList.contains('delete-btn')) {
             const type = e.target.dataset.type;

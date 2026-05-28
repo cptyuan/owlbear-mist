@@ -12,10 +12,12 @@
     .add-form input { flex: 1; padding: 4px; border-radius: 3px; border: 1px solid #555; background: #1e1e1e; color: #fff; }
     .add-form button { background: #5cb85c; border: none; color: white; padding: 4px 10px; border-radius: 3px; cursor: pointer; }
     .no-token { color: #888; font-style: italic; }
+    #debug { background: #111; padding: 8px; font-family: monospace; font-size: 12px; margin-bottom: 10px; max-height: 150px; overflow-y: auto; white-space: pre-wrap; }
   </style>
 </head>
 <body>
   <div id="app">
+    <div id="debug">正在初始化...</div>
     <div id="token-name" class="no-token">未选中任何 token</div>
     <div class="section">
       <h3>🏷️ 标签</h3>
@@ -48,23 +50,33 @@
   <script type="module">
     import OBR from "https://esm.sh/@owlbear-rodeo/sdk@1.12.0";
 
-    OBR.onReady(() => {
-      console.log('✅ SDK ready');
+    const debugEl = document.getElementById('debug');
+    function debug(msg) {
+      debugEl.textContent += msg + '\n';
+      console.log(msg);
+    }
+
+    try {
+      await OBR.onReady();
+      debug('✅ SDK ready');
 
       const tokenNameEl = document.getElementById('token-name');
       const tagsListEl = document.getElementById('tags-list');
       const statusesListEl = document.getElementById('statuses-list');
       const powersListEl = document.getElementById('powers-list');
 
-      // 修复后的获取选中 token 函数
       async function getSelectedToken() {
         const selection = await OBR.player.getSelection();
-        console.log('当前选择 ID 列表:', selection);
+        debug('选择 ID 列表: ' + JSON.stringify(selection));
         if (!selection || selection.length === 0) return null;
-        // 获取完整 item 对象，包含 metadata
+        // 使用 getItems 获取完整对象
         const items = await OBR.scene.items.getItems(selection);
-        console.log('获取到的完整物品:', items);
-        return items[0] || null;
+        debug('获取到物品数量: ' + (items ? items.length : 'null'));
+        if (items && items.length > 0) {
+          debug('物品名称: ' + (items[0].name || '无名称'));
+          return items[0];
+        }
+        return null;
       }
 
       function getCustomLabels(item) {
@@ -72,19 +84,25 @@
       }
 
       async function saveCustomLabels(item, labels) {
-        await OBR.scene.items.updateItems([item.id], (items) => {
-          const target = items[0];
-          if (!target) return;
-          if (!target.metadata) target.metadata = {};
-          target.metadata['com.cptyuan.token-labels'] = labels;
-        });
+        try {
+          await OBR.scene.items.updateItems([item.id], (items) => {
+            const target = items[0];
+            if (!target) return;
+            if (!target.metadata) target.metadata = {};
+            target.metadata['com.cptyuan.token-labels'] = labels;
+          });
+          debug('保存成功');
+        } catch (e) {
+          debug('保存失败: ' + e.message);
+          throw e;
+        }
       }
 
       async function refreshPanel() {
+        debug('--- refreshPanel 开始 ---');
         const token = await getSelectedToken();
-        console.log('刷新面板，当前 token:', token);
         if (!token) {
-          tokenNameEl.textContent = '未选中任何 token（请点选一个角色或坐骑）';
+          tokenNameEl.textContent = '未选中任何 token';
           tagsListEl.innerHTML = '';
           statusesListEl.innerHTML = '';
           powersListEl.innerHTML = '';
@@ -114,6 +132,7 @@
             <button class="delete-btn" data-type="power" data-index="${i}">删除</button>
           </div>
         `).join('');
+        debug('面板刷新完成');
       }
 
       function escapeHtml(text) {
@@ -122,11 +141,10 @@
         return div.innerHTML;
       }
 
-      // 添加按钮事件（保持不变，但增加调试）
+      // 绑定按钮
       document.getElementById('add-tag-btn').onclick = async () => {
-        console.log('点击添加标签');
         const token = await getSelectedToken();
-        if (!token) return alert('请先在画布上选中一个 token');
+        if (!token) return alert('请先选中一个 token');
         const text = document.getElementById('new-tag').value.trim();
         if (!text) return;
         const labels = getCustomLabels(token);
@@ -138,7 +156,7 @@
 
       document.getElementById('add-status-btn').onclick = async () => {
         const token = await getSelectedToken();
-        if (!token) return alert('请先在画布上选中一个 token');
+        if (!token) return alert('请先选中一个 token');
         const name = document.getElementById('new-status-name').value.trim();
         const level = parseInt(document.getElementById('new-status-level').value);
         if (!name || isNaN(level)) return;
@@ -160,7 +178,7 @@
 
       document.getElementById('add-power-btn').onclick = async () => {
         const token = await getSelectedToken();
-        if (!token) return alert('请先在画布上选中一个 token');
+        if (!token) return alert('请先选中一个 token');
         const name = document.getElementById('new-power-name').value.trim();
         const level = parseInt(document.getElementById('new-power-level').value);
         if (!name || isNaN(level)) return;
@@ -185,10 +203,18 @@
         }
       });
 
-      OBR.player.onChange(refreshPanel);
-      refreshPanel();
-      console.log('✅ 面板初始化完成');
-    });
+      OBR.player.onChange(() => {
+        debug('选中变化，触发刷新');
+        refreshPanel();
+      });
+
+      // 初始刷新
+      await refreshPanel();
+      debug('✅ 初始化完成');
+    } catch (error) {
+      debug('❌ 初始化失败: ' + error.message);
+      console.error(error);
+    }
   </script>
 </body>
 </html>

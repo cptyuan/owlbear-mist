@@ -15,12 +15,10 @@
     .offset-control { display: flex; gap: 4px; margin-left: auto; }
     .offset-control input { width: 40px; padding: 2px; border-radius: 3px; border: 1px solid #555; background: #1e1e1e; color: #fff; text-align: center; }
     .offset-btn { background: #5bc0de; border: none; color: white; padding: 2px 6px; border-radius: 3px; cursor: pointer; font-size: 0.9em; }
-    #refresh-draw-btn { background: #f0ad4e; border: none; color: black; padding: 6px 12px; margin-bottom: 10px; border-radius: 4px; cursor: pointer; font-weight: bold; }
   </style>
 </head>
 <body>
   <div id="app">
-    <button id="refresh-draw-btn">🔄 启用/刷新画布标注</button>
     <div id="token-name" class="no-token">未选中任何 token</div>
     <div class="section">
       <h3>🏷️ 标签</h3>
@@ -53,158 +51,21 @@
   <script type="module">
     import OBR from "https://esm.sh/@owlbear-rodeo/sdk";
 
-    // 绘制辅助函数（同前）
-    function drawRoundRect(ctx, x, y, w, h, r) {
-      ctx.beginPath();
-      ctx.moveTo(x + r, y);
-      ctx.lineTo(x + w - r, y);
-      ctx.quadraticCurveTo(x + w, y, x + w, y + r);
-      ctx.lineTo(x + w, y + h - r);
-      ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-      ctx.lineTo(x + r, y + h);
-      ctx.quadraticCurveTo(x, y + h, x, y + h - r);
-      ctx.lineTo(x, y + r);
-      ctx.quadraticCurveTo(x, y, x + r, y);
-      ctx.closePath();
-      ctx.fill();
-    }
-
-    function drawLabels(ctx, tags, color, tokenCenterX, tokenCenterY, tokenW, tokenH, scale) {
-      let offsetY = -10;
-      tags.forEach(tag => {
-        const text = tag.text;
-        ctx.font = `${12 * scale}px sans-serif`;
-        const metrics = ctx.measureText(text);
-        const padding = 4 * scale;
-        const boxWidth = metrics.width + padding * 2;
-        const boxHeight = 16 * scale;
-        const x = tokenCenterX + tokenW / 2 + 5 * scale;
-        const y = tokenCenterY - tokenH / 2 + offsetY;
-
-        ctx.fillStyle = color;
-        drawRoundRect(ctx, x, y, boxWidth, boxHeight, 4 * scale);
-        ctx.fillStyle = '#000';
-        ctx.fillText(text, x + padding, y + boxHeight - 5 * scale);
-        
-        offsetY += boxHeight + 2 * scale;
-      });
-    }
-
-    function drawStatuses(ctx, statuses, color, tokenCenterX, tokenCenterY, tokenW, tokenH, scale) {
-      let offsetY = -10;
-      statuses.forEach(status => {
-        const levels = status.levels.sort((a,b) => a-b);
-        if (levels.length === 0) return;
-        const highest = levels[levels.length - 1];
-        const lowerLevels = levels.slice(0, -1).join('');
-        const namePrefix = status.name + '-';
-        
-        ctx.font = `${12 * scale}px sans-serif`;
-        const nameWidth = ctx.measureText(namePrefix).width;
-        
-        let lowerWidth = 0;
-        if (lowerLevels) {
-          ctx.font = `${8 * scale}px sans-serif`;
-          lowerWidth = ctx.measureText(lowerLevels).width;
-        }
-        ctx.font = `bold ${12 * scale}px sans-serif`;
-        const highWidth = ctx.measureText(highest.toString()).width;
-        
-        const totalTextWidth = nameWidth + lowerWidth + highWidth;
-        const padding = 4 * scale;
-        const boxWidth = totalTextWidth + padding * 2;
-        const boxHeight = 16 * scale;
-        const x = tokenCenterX - tokenW / 2 - boxWidth - 5 * scale;
-        const y = tokenCenterY - tokenH / 2 + offsetY;
-
-        ctx.fillStyle = color;
-        drawRoundRect(ctx, x, y, boxWidth, boxHeight, 4 * scale);
-        ctx.fillStyle = '#000';
-        ctx.font = `${12 * scale}px sans-serif`;
-        ctx.fillText(namePrefix, x + padding, y + boxHeight - 5 * scale);
-        
-        let currentX = x + padding + nameWidth;
-        if (lowerLevels) {
-          ctx.font = `${8 * scale}px sans-serif`;
-          ctx.fillStyle = '#555';
-          ctx.fillText(lowerLevels, currentX, y + boxHeight - 5 * scale);
-          currentX += lowerWidth;
-        }
-        ctx.font = `bold ${12 * scale}px sans-serif`;
-        ctx.fillStyle = '#000';
-        ctx.fillText(highest.toString(), currentX, y + boxHeight - 5 * scale);
-
-        offsetY += boxHeight + 2 * scale;
-      });
-    }
-
-    function drawPowers(ctx, powers, color, tokenCenterX, tokenCenterY, tokenW, tokenH, scale) {
-      let offsetY = -10;
-      powers.forEach(power => {
-        const text = `${power.name}-${power.level}`;
-        ctx.font = `${12 * scale}px sans-serif`;
-        const metrics = ctx.measureText(text);
-        const padding = 4 * scale;
-        const boxWidth = metrics.width + padding * 2;
-        const boxHeight = 16 * scale;
-        const x = tokenCenterX + tokenW / 2 + 5 * scale;
-        const y = tokenCenterY + tokenH / 2 + offsetY;
-
-        ctx.fillStyle = color;
-        drawRoundRect(ctx, x, y, boxWidth, boxHeight, 4 * scale);
-        ctx.fillStyle = '#000';
-        ctx.fillText(text, x + padding, y + boxHeight - 5 * scale);
-        
-        offsetY += boxHeight + 2 * scale;
-      });
-    }
-
-    // 注册绘制回调（会被多次调用，但 OBR 内部会覆盖）
-    function registerDraw() {
-      console.log('尝试注册画布绘制...');
-      try {
-        if (OBR.scene && OBR.scene.canvas && typeof OBR.scene.canvas.draw === 'function') {
-          OBR.scene.canvas.draw((ctx, viewport) => {
-            OBR.scene.items.getItems().then((items) => {
-              const tokens = items.filter(item => item.layer === 'CHARACTER' || item.layer === 'MOUNT');
-              for (const token of tokens) {
-                const labels = token.metadata?.['com.cptyuan.token-labels'];
-                if (!labels) continue;
-
-                const { x: tokenX, y: tokenY } = token.position;
-                const tokenWidth = token.size.width;
-                const tokenHeight = token.size.height;
-                const screenX = (tokenX - viewport.offset.x) * viewport.scale + viewport.width / 2;
-                const screenY = (tokenY - viewport.offset.y) * viewport.scale + viewport.height / 2;
-                const screenW = tokenWidth * viewport.scale;
-                const screenH = tokenHeight * viewport.scale;
-
-                drawLabels(ctx, labels.tags, '#FF9800', screenX, screenY, screenW, screenH, viewport.scale);
-                drawStatuses(ctx, labels.statuses, '#8BC34A', screenX, screenY, screenW, screenH, viewport.scale);
-                drawPowers(ctx, labels.powers, '#9C27B0', screenX, screenY, screenW, screenH, viewport.scale);
-              }
-            }).catch(e => console.warn('绘制获取物品失败:', e));
-          });
-          console.log('✅ 画布绘制已注册');
-          alert('画布标注已启用！请保持面板打开，查看 token 旁边的文字。');
-        } else {
-          console.warn('⚠️ canvas.draw 不可用');
-          alert('当前环境不支持画布绘制。请尝试刷新页面或重试。');
-        }
-      } catch (e) {
-        console.error('注册绘制失败:', e);
-        alert('注册绘制失败：' + e.message);
-      }
-    }
-
-    // 主初始化
     OBR.onReady(() => {
-      // ------ 面板核心功能（同前）------
+      // 颜色配置
+      const COLORS = {
+        tag: '#FF9800',
+        status: '#8BC34A',
+        power: '#9C27B0'
+      };
+
+      // DOM 元素
       const tokenNameEl = document.getElementById('token-name');
       const tagsListEl = document.getElementById('tags-list');
       const statusesListEl = document.getElementById('statuses-list');
       const powersListEl = document.getElementById('powers-list');
 
+      // ----- 工具函数 -----
       async function getSelectedToken() {
         const selection = await OBR.player.getSelection();
         if (!selection || selection.length === 0) return null;
@@ -225,6 +86,7 @@
         });
       }
 
+      // 状态槽位逻辑
       function addStatusLevel(existingLevels, newLevel) {
         if (newLevel < 1 || newLevel > 7) return null;
         const levels = new Set(existingLevels);
@@ -241,12 +103,117 @@
         return null;
       }
 
+      // 格式化状态文本（用于面板显示）
       function formatStatus(status) {
         const levels = status.levels.slice().sort((a,b) => a-b);
         if (levels.length === 0) return status.name;
         return `${status.name} - [${levels.join(',')}]`;
       }
 
+      // 生成附件文本（用于实际显示在 token 旁）
+      function getAttachmentText(type, data) {
+        if (type === 'tag') return data.text;
+        if (type === 'power') return `${data.name}-${data.level}`;
+        // 状态：最高级大号，其他小号（通过 HTML 实现）
+        if (type === 'status') {
+          const levels = data.levels.slice().sort((a,b) => a-b);
+          if (levels.length === 0) return data.name;
+          const highest = levels.pop();
+          const lower = levels.join('');
+          let html = `${data.name}-`;
+          if (lower) html += `<span style="font-size:0.7em;opacity:0.6;">${lower}</span>`;
+          html += `<strong>${highest}</strong>`;
+          return html;
+        }
+        return '';
+      }
+
+      // ----- 附件管理 -----
+      // 删除 token 上所有属于我们扩展的附件
+      async function removeAllAttachments(tokenId) {
+        const attachments = await OBR.scene.items.getAttachments(tokenId);
+        for (const att of attachments) {
+          if (att.metadata?.['com.cptyuan.token-labels.attachment']) {
+            await OBR.scene.items.deleteAttachments([att.id]);
+          }
+        }
+      }
+
+      // 根据当前标注数据重建附件
+      async function rebuildAttachments(token) {
+        // 先清除旧附件
+        await removeAllAttachments(token.id);
+        
+        const labels = getCustomLabels(token);
+        const attachments = [];
+
+        // 标签附件
+        for (const tag of labels.tags) {
+          attachments.push({
+            type: 'LABEL',
+            visible: true,
+            text: getAttachmentText('tag', tag),
+            style: {
+              backgroundColor: COLORS.tag,
+              color: '#000',
+              padding: '2px 6px',
+              borderRadius: '4px',
+              fontSize: '14px',
+              fontWeight: 'normal',
+              textAlign: 'center'
+            },
+            position: { x: 50, y: -30 }, // 初始位置，可拖动
+            metadata: { 'com.cptyuan.token-labels.attachment': 'tag' }
+          });
+        }
+
+        // 状态附件
+        for (const status of labels.statuses) {
+          attachments.push({
+            type: 'LABEL',
+            visible: true,
+            text: getAttachmentText('status', status),
+            style: {
+              backgroundColor: COLORS.status,
+              color: '#000',
+              padding: '2px 6px',
+              borderRadius: '4px',
+              fontSize: '14px',
+              fontWeight: 'normal',
+              textAlign: 'center'
+            },
+            position: { x: -50, y: -30 },
+            metadata: { 'com.cptyuan.token-labels.attachment': 'status' }
+          });
+        }
+
+        // 威能附件
+        for (const power of labels.powers) {
+          attachments.push({
+            type: 'LABEL',
+            visible: true,
+            text: getAttachmentText('power', power),
+            style: {
+              backgroundColor: COLORS.power,
+              color: '#000',
+              padding: '2px 6px',
+              borderRadius: '4px',
+              fontSize: '14px',
+              fontWeight: 'normal',
+              textAlign: 'center'
+            },
+            position: { x: 50, y: 30 },
+            metadata: { 'com.cptyuan.token-labels.attachment': 'power' }
+          });
+        }
+
+        // 批量创建附件
+        if (attachments.length > 0) {
+          await OBR.scene.items.createAttachments(token.id, attachments);
+        }
+      }
+
+      // ----- 面板刷新（同时触发附件重建）-----
       async function refreshPanel() {
         const token = await getSelectedToken();
         if (!token) {
@@ -260,6 +227,7 @@
         tokenNameEl.textContent = `📌 ${token.name || '未命名'}`;
         const labels = getCustomLabels(token);
 
+        // 标签列表
         tagsListEl.innerHTML = labels.tags.map((tag, i) => `
           <div class="item">
             <span>${escapeHtml(tag.text)}</span>
@@ -267,6 +235,7 @@
           </div>
         `).join('');
 
+        // 状态列表
         statusesListEl.innerHTML = labels.statuses.map((status, i) => `
           <div class="item">
             <span>${escapeHtml(formatStatus(status))}</span>
@@ -278,12 +247,16 @@
           </div>
         `).join('');
 
+        // 威能列表
         powersListEl.innerHTML = labels.powers.map((power, i) => `
           <div class="item">
             <span>${escapeHtml(power.name)} - ${power.level}</span>
             <button class="delete-btn" data-type="power" data-index="${i}">删除</button>
           </div>
         `).join('');
+
+        // 重建该 token 的附件
+        await rebuildAttachments(token);
       }
 
       function escapeHtml(text) {
@@ -292,8 +265,9 @@
         return div.innerHTML;
       }
 
-      // 事件绑定
+      // ----- 事件处理 -----
       document.body.addEventListener('click', async (e) => {
+        // 删除按钮
         if (e.target.classList.contains('delete-btn')) {
           const type = e.target.dataset.type;
           const index = parseInt(e.target.dataset.index);
@@ -308,6 +282,7 @@
           refreshPanel();
         }
 
+        // 偏移按钮
         if (e.target.classList.contains('offset-btn')) {
           const index = parseInt(e.target.dataset.index);
           const offsetInput = document.getElementById(`offset-${index}`);
@@ -334,18 +309,20 @@
         }
       });
 
+      // 添加标签
       document.getElementById('add-tag-btn').onclick = async () => {
         const token = await getSelectedToken();
         if (!token) return alert('请先选中一个 token');
         const text = document.getElementById('new-tag').value.trim();
         if (!text) return;
         const labels = getCustomLabels(token);
-        labels.tags.push({ id: crypto.randomUUID(), text: text, offsetX: 0, offsetY: 0 });
+        labels.tags.push({ id: crypto.randomUUID(), text: text });
         await saveCustomLabels(token, labels);
         document.getElementById('new-tag').value = '';
         refreshPanel();
       };
 
+      // 添加状态
       document.getElementById('add-status-btn').onclick = async () => {
         const token = await getSelectedToken();
         if (!token) return alert('请先选中一个 token');
@@ -363,9 +340,7 @@
           labels.statuses.push({
             id: crypto.randomUUID(),
             name: name,
-            levels: [level],
-            offsetX: 0,
-            offsetY: 0
+            levels: [level]
           });
         }
         await saveCustomLabels(token, labels);
@@ -374,6 +349,7 @@
         refreshPanel();
       };
 
+      // 添加威能
       document.getElementById('add-power-btn').onclick = async () => {
         const token = await getSelectedToken();
         if (!token) return alert('请先选中一个 token');
@@ -381,24 +357,17 @@
         const level = parseInt(document.getElementById('new-power-level').value);
         if (!name || isNaN(level)) return;
         const labels = getCustomLabels(token);
-        labels.powers.push({ id: crypto.randomUUID(), name: name, level: level, offsetX: 0, offsetY: 0 });
+        labels.powers.push({ id: crypto.randomUUID(), name: name, level: level });
         await saveCustomLabels(token, labels);
         document.getElementById('new-power-name').value = '';
         document.getElementById('new-power-level').value = '';
         refreshPanel();
       };
 
+      // 监听选中变化
       OBR.player.onChange(refreshPanel);
+      // 初始不刷新，等用户选中
       refreshPanel();
-      console.log('✅ 面板初始化完成');
-
-      // ------ 绘制注册（延迟确保 API 可用）------
-      document.getElementById('refresh-draw-btn').onclick = registerDraw;
-      // 也可自动尝试一次（延迟5秒）
-      setTimeout(() => {
-        console.log('自动尝试注册绘制...');
-        registerDraw();
-      }, 5000);
     });
   </script>
 </body>

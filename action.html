@@ -45,11 +45,10 @@
     </div>
   </div>
 
-  <script src="https://esm.sh/@owlbear-rodeo/sdk@latest"></script>
+  <script src="https://esm.sh/@owlbear-rodeo/sdk@1.12.0"></script>
   <script>
     (async () => {
       try {
-        // 等待 SDK 完全就绪
         await OBR.onReady();
         console.log('✅ OBR SDK 已就绪');
 
@@ -58,25 +57,14 @@
         const statusesListEl = document.getElementById('statuses-list');
         const powersListEl = document.getElementById('powers-list');
 
-        // ---------- 工具函数 ----------
+        // 获取当前选中的第一个 token（角色或坐骑）
         async function getSelectedToken() {
-          try {
-            const selection = await OBR.player.getSelection();
-            console.log('当前选中项:', selection);
-            if (selection && selection.length === 1) {
-              const item = selection[0];
-              // 检查 item 是否包含必要的属性
-              if (item && item.id) {
-                // 获取完整的 item 信息，确保能访问 metadata
-                const fullItem = await OBR.scene.items.getItem(item.id);
-                return fullItem;
-              }
-            }
-            return null;
-          } catch (e) {
-            console.error('获取选中 token 失败:', e);
-            return null;
+          const selection = await OBR.player.getSelection();
+          if (selection && selection.length > 0) {
+            // 直接返回第一个 item，它已包含 id, name, metadata 等
+            return selection[0];
           }
+          return null;
         }
 
         function getCustomLabels(item) {
@@ -84,19 +72,12 @@
         }
 
         async function saveCustomLabels(item, labels) {
-          try {
-            await OBR.scene.items.updateItems([item.id], (items) => {
-              if (!items[0].metadata) items[0].metadata = {};
-              items[0].metadata['com.cptyuan.token-labels'] = labels;
-            });
-            console.log('✅ 标注数据已保存');
-          } catch (e) {
-            console.error('保存标注数据失败:', e);
-            alert('保存失败，请查看控制台');
-          }
+          await OBR.scene.items.updateItems([item.id], (items) => {
+            if (!items[0].metadata) items[0].metadata = {};
+            items[0].metadata['com.cptyuan.token-labels'] = labels;
+          });
         }
 
-        // ---------- 刷新面板 ----------
         async function refreshPanel() {
           const token = await getSelectedToken();
           if (!token) {
@@ -110,7 +91,6 @@
           tokenNameEl.textContent = `📌 ${token.name || '未命名'} (${token.id.slice(0,6)})`;
           const labels = getCustomLabels(token);
 
-          // 标签
           tagsListEl.innerHTML = labels.tags.map((tag, i) => `
             <div class="item">
               <span>${escapeHtml(tag.text)}</span>
@@ -118,7 +98,6 @@
             </div>
           `).join('');
 
-          // 状态
           statusesListEl.innerHTML = labels.statuses.map((status, i) => `
             <div class="item">
               <span>${escapeHtml(status.name)} - ${status.levels?.join(',') || '无等级'}</span>
@@ -126,7 +105,6 @@
             </div>
           `).join('');
 
-          // 威能
           powersListEl.innerHTML = labels.powers.map((power, i) => `
             <div class="item">
               <span>${escapeHtml(power.name)} - ${power.level}</span>
@@ -141,10 +119,10 @@
           return div.innerHTML;
         }
 
-        // ---------- 添加功能 ----------
+        // 添加标签
         document.getElementById('add-tag-btn').onclick = async () => {
           const token = await getSelectedToken();
-          if (!token) return alert('请先在画布上选中一个 token（角色或坐骑）');
+          if (!token) return alert('请先在画布上选中一个 token');
           const text = document.getElementById('new-tag').value.trim();
           if (!text) return;
           const labels = getCustomLabels(token);
@@ -154,9 +132,10 @@
           refreshPanel();
         };
 
+        // 添加状态
         document.getElementById('add-status-btn').onclick = async () => {
           const token = await getSelectedToken();
-          if (!token) return alert('请先在画布上选中一个 token（角色或坐骑）');
+          if (!token) return alert('请先在画布上选中一个 token');
           const name = document.getElementById('new-status-name').value.trim();
           const level = parseInt(document.getElementById('new-status-level').value);
           if (!name || isNaN(level)) return;
@@ -176,9 +155,10 @@
           refreshPanel();
         };
 
+        // 添加威能
         document.getElementById('add-power-btn').onclick = async () => {
           const token = await getSelectedToken();
-          if (!token) return alert('请先在画布上选中一个 token（角色或坐骑）');
+          if (!token) return alert('请先在画布上选中一个 token');
           const name = document.getElementById('new-power-name').value.trim();
           const level = parseInt(document.getElementById('new-power-level').value);
           if (!name || isNaN(level)) return;
@@ -190,7 +170,7 @@
           refreshPanel();
         };
 
-        // 删除功能
+        // 删除
         document.body.addEventListener('click', async (e) => {
           if (e.target.classList.contains('delete-btn')) {
             const type = e.target.dataset.type;
@@ -204,15 +184,12 @@
           }
         });
 
-        // 监听选中变化
         OBR.player.onChange(refreshPanel);
-
-        // 初始加载
         refreshPanel();
         console.log('✅ 面板初始化完成');
       } catch (error) {
-        console.error('❌ 面板初始化失败:', error);
-        document.getElementById('app').innerHTML = '<p style="color:red">面板初始化失败，请刷新房间重试。</p>';
+        console.error('❌ 初始化失败:', error);
+        document.getElementById('app').innerHTML = '<p style="color:red">面板初始化失败：' + error.message + '</p>';
       }
     })();
   </script>

@@ -1,8 +1,14 @@
 {
   "name": "token-labels",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "manifest_version": 1,
   "description": "给 token 添加标签、状态和威能",
   "author": "cptyuan",
-  "action": "/action.html"
+  "action": {
+    "title": "Token 标注",
+    "icon": "/tag.svg",
+    "popover": "/action.html",
+    "height": 600,
+    "width": 350
+  }
 }

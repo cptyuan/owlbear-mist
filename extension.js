@@ -1,4 +1,4 @@
-const OBR = window.OBR;
+import OBR from "https://esm.sh/@owlbear-rodeo/sdk";
 
 OBR.onReady(() => {
     OBR.tool.createAction({

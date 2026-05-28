@@ -56,165 +56,165 @@
       console.log(msg);
     }
 
-    try {
-      await OBR.onReady();
-      debug('✅ SDK ready');
+    // 使用回调模式，确保通信已就绪
+    OBR.onReady(() => {
+      try {
+        debug('✅ SDK ready');
 
-      const tokenNameEl = document.getElementById('token-name');
-      const tagsListEl = document.getElementById('tags-list');
-      const statusesListEl = document.getElementById('statuses-list');
-      const powersListEl = document.getElementById('powers-list');
+        const tokenNameEl = document.getElementById('token-name');
+        const tagsListEl = document.getElementById('tags-list');
+        const statusesListEl = document.getElementById('statuses-list');
+        const powersListEl = document.getElementById('powers-list');
 
-      async function getSelectedToken() {
-        const selection = await OBR.player.getSelection();
-        debug('选择 ID 列表: ' + JSON.stringify(selection));
-        if (!selection || selection.length === 0) return null;
-        // 使用 getItems 获取完整对象
-        const items = await OBR.scene.items.getItems(selection);
-        debug('获取到物品数量: ' + (items ? items.length : 'null'));
-        if (items && items.length > 0) {
-          debug('物品名称: ' + (items[0].name || '无名称'));
-          return items[0];
-        }
-        return null;
-      }
-
-      function getCustomLabels(item) {
-        return item?.metadata?.['com.cptyuan.token-labels'] || { tags: [], statuses: [], powers: [] };
-      }
-
-      async function saveCustomLabels(item, labels) {
-        try {
-          await OBR.scene.items.updateItems([item.id], (items) => {
-            const target = items[0];
-            if (!target) return;
-            if (!target.metadata) target.metadata = {};
-            target.metadata['com.cptyuan.token-labels'] = labels;
-          });
-          debug('保存成功');
-        } catch (e) {
-          debug('保存失败: ' + e.message);
-          throw e;
-        }
-      }
-
-      async function refreshPanel() {
-        debug('--- refreshPanel 开始 ---');
-        const token = await getSelectedToken();
-        if (!token) {
-          tokenNameEl.textContent = '未选中任何 token';
-          tagsListEl.innerHTML = '';
-          statusesListEl.innerHTML = '';
-          powersListEl.innerHTML = '';
-          return;
-        }
-
-        tokenNameEl.textContent = `📌 ${token.name || '未命名'} (${token.id.slice(0,6)})`;
-        const labels = getCustomLabels(token);
-
-        tagsListEl.innerHTML = labels.tags.map((tag, i) => `
-          <div class="item">
-            <span>${escapeHtml(tag.text)}</span>
-            <button class="delete-btn" data-type="tag" data-index="${i}">删除</button>
-          </div>
-        `).join('');
-
-        statusesListEl.innerHTML = labels.statuses.map((status, i) => `
-          <div class="item">
-            <span>${escapeHtml(status.name)} - ${status.levels?.join(',') || '无等级'}</span>
-            <button class="delete-btn" data-type="status" data-index="${i}">删除</button>
-          </div>
-        `).join('');
-
-        powersListEl.innerHTML = labels.powers.map((power, i) => `
-          <div class="item">
-            <span>${escapeHtml(power.name)} - ${power.level}</span>
-            <button class="delete-btn" data-type="power" data-index="${i}">删除</button>
-          </div>
-        `).join('');
-        debug('面板刷新完成');
-      }
-
-      function escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-      }
-
-      // 绑定按钮
-      document.getElementById('add-tag-btn').onclick = async () => {
-        const token = await getSelectedToken();
-        if (!token) return alert('请先选中一个 token');
-        const text = document.getElementById('new-tag').value.trim();
-        if (!text) return;
-        const labels = getCustomLabels(token);
-        labels.tags.push({ id: crypto.randomUUID(), text: text, offsetX: 0, offsetY: 0 });
-        await saveCustomLabels(token, labels);
-        document.getElementById('new-tag').value = '';
-        refreshPanel();
-      };
-
-      document.getElementById('add-status-btn').onclick = async () => {
-        const token = await getSelectedToken();
-        if (!token) return alert('请先选中一个 token');
-        const name = document.getElementById('new-status-name').value.trim();
-        const level = parseInt(document.getElementById('new-status-level').value);
-        if (!name || isNaN(level)) return;
-        const labels = getCustomLabels(token);
-        let existing = labels.statuses.find(s => s.name === name);
-        if (existing) {
-          if (!existing.levels.includes(level)) {
-            existing.levels.push(level);
-            existing.levels.sort((a,b) => a-b);
+        async function getSelectedToken() {
+          const selection = await OBR.player.getSelection();
+          debug('选择 ID 列表: ' + JSON.stringify(selection));
+          if (!selection || selection.length === 0) return null;
+          const items = await OBR.scene.items.getItems(selection);
+          debug('获取到物品数量: ' + (items ? items.length : 'null'));
+          if (items && items.length > 0) {
+            debug('物品名称: ' + (items[0].name || '无名称'));
+            return items[0];
           }
-        } else {
-          labels.statuses.push({ id: crypto.randomUUID(), name: name, levels: [level], offsetX: 0, offsetY: 0 });
+          return null;
         }
-        await saveCustomLabels(token, labels);
-        document.getElementById('new-status-name').value = '';
-        document.getElementById('new-status-level').value = '';
-        refreshPanel();
-      };
 
-      document.getElementById('add-power-btn').onclick = async () => {
-        const token = await getSelectedToken();
-        if (!token) return alert('请先选中一个 token');
-        const name = document.getElementById('new-power-name').value.trim();
-        const level = parseInt(document.getElementById('new-power-level').value);
-        if (!name || isNaN(level)) return;
-        const labels = getCustomLabels(token);
-        labels.powers.push({ id: crypto.randomUUID(), name: name, level: level, offsetX: 0, offsetY: 0 });
-        await saveCustomLabels(token, labels);
-        document.getElementById('new-power-name').value = '';
-        document.getElementById('new-power-level').value = '';
-        refreshPanel();
-      };
+        function getCustomLabels(item) {
+          return item?.metadata?.['com.cptyuan.token-labels'] || { tags: [], statuses: [], powers: [] };
+        }
 
-      document.body.addEventListener('click', async (e) => {
-        if (e.target.classList.contains('delete-btn')) {
-          const type = e.target.dataset.type;
-          const index = parseInt(e.target.dataset.index);
+        async function saveCustomLabels(item, labels) {
+          try {
+            await OBR.scene.items.updateItems([item.id], (items) => {
+              const target = items[0];
+              if (!target) return;
+              if (!target.metadata) target.metadata = {};
+              target.metadata['com.cptyuan.token-labels'] = labels;
+            });
+            debug('保存成功');
+          } catch (e) {
+            debug('保存失败: ' + e.message);
+            throw e;
+          }
+        }
+
+        async function refreshPanel() {
+          debug('--- refreshPanel 开始 ---');
           const token = await getSelectedToken();
-          if (!token) return;
+          if (!token) {
+            tokenNameEl.textContent = '未选中任何 token';
+            tagsListEl.innerHTML = '';
+            statusesListEl.innerHTML = '';
+            powersListEl.innerHTML = '';
+            return;
+          }
+
+          tokenNameEl.textContent = `📌 ${token.name || '未命名'} (${token.id.slice(0,6)})`;
           const labels = getCustomLabels(token);
-          labels[type + 's'].splice(index, 1);
-          await saveCustomLabels(token, labels);
-          refreshPanel();
+
+          tagsListEl.innerHTML = labels.tags.map((tag, i) => `
+            <div class="item">
+              <span>${escapeHtml(tag.text)}</span>
+              <button class="delete-btn" data-type="tag" data-index="${i}">删除</button>
+            </div>
+          `).join('');
+
+          statusesListEl.innerHTML = labels.statuses.map((status, i) => `
+            <div class="item">
+              <span>${escapeHtml(status.name)} - ${status.levels?.join(',') || '无等级'}</span>
+              <button class="delete-btn" data-type="status" data-index="${i}">删除</button>
+            </div>
+          `).join('');
+
+          powersListEl.innerHTML = labels.powers.map((power, i) => `
+            <div class="item">
+              <span>${escapeHtml(power.name)} - ${power.level}</span>
+              <button class="delete-btn" data-type="power" data-index="${i}">删除</button>
+            </div>
+          `).join('');
+          debug('面板刷新完成');
         }
-      });
 
-      OBR.player.onChange(() => {
-        debug('选中变化，触发刷新');
+        function escapeHtml(text) {
+          const div = document.createElement('div');
+          div.textContent = text;
+          return div.innerHTML;
+        }
+
+        document.getElementById('add-tag-btn').onclick = async () => {
+          const token = await getSelectedToken();
+          if (!token) return alert('请先选中一个 token');
+          const text = document.getElementById('new-tag').value.trim();
+          if (!text) return;
+          const labels = getCustomLabels(token);
+          labels.tags.push({ id: crypto.randomUUID(), text: text, offsetX: 0, offsetY: 0 });
+          await saveCustomLabels(token, labels);
+          document.getElementById('new-tag').value = '';
+          refreshPanel();
+        };
+
+        document.getElementById('add-status-btn').onclick = async () => {
+          const token = await getSelectedToken();
+          if (!token) return alert('请先选中一个 token');
+          const name = document.getElementById('new-status-name').value.trim();
+          const level = parseInt(document.getElementById('new-status-level').value);
+          if (!name || isNaN(level)) return;
+          const labels = getCustomLabels(token);
+          let existing = labels.statuses.find(s => s.name === name);
+          if (existing) {
+            if (!existing.levels.includes(level)) {
+              existing.levels.push(level);
+              existing.levels.sort((a,b) => a-b);
+            }
+          } else {
+            labels.statuses.push({ id: crypto.randomUUID(), name: name, levels: [level], offsetX: 0, offsetY: 0 });
+          }
+          await saveCustomLabels(token, labels);
+          document.getElementById('new-status-name').value = '';
+          document.getElementById('new-status-level').value = '';
+          refreshPanel();
+        };
+
+        document.getElementById('add-power-btn').onclick = async () => {
+          const token = await getSelectedToken();
+          if (!token) return alert('请先选中一个 token');
+          const name = document.getElementById('new-power-name').value.trim();
+          const level = parseInt(document.getElementById('new-power-level').value);
+          if (!name || isNaN(level)) return;
+          const labels = getCustomLabels(token);
+          labels.powers.push({ id: crypto.randomUUID(), name: name, level: level, offsetX: 0, offsetY: 0 });
+          await saveCustomLabels(token, labels);
+          document.getElementById('new-power-name').value = '';
+          document.getElementById('new-power-level').value = '';
+          refreshPanel();
+        };
+
+        document.body.addEventListener('click', async (e) => {
+          if (e.target.classList.contains('delete-btn')) {
+            const type = e.target.dataset.type;
+            const index = parseInt(e.target.dataset.index);
+            const token = await getSelectedToken();
+            if (!token) return;
+            const labels = getCustomLabels(token);
+            labels[type + 's'].splice(index, 1);
+            await saveCustomLabels(token, labels);
+            refreshPanel();
+          }
+        });
+
+        OBR.player.onChange(() => {
+          debug('选中变化，触发刷新');
+          refreshPanel();
+        });
+
+        // 初始刷新
         refreshPanel();
-      });
-
-      // 初始刷新
-      await refreshPanel();
-      debug('✅ 初始化完成');
-    } catch (error) {
-      debug('❌ 初始化失败: ' + error.message);
-      console.error(error);
-    }
+        debug('✅ 初始化完成');
+      } catch (error) {
+        debug('❌ 初始化失败: ' + error.message);
+        console.error(error);
+      }
+    });
   </script>
 </body>
 </html>

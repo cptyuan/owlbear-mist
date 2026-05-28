@@ -52,20 +52,18 @@
     import OBR from "https://esm.sh/@owlbear-rodeo/sdk";
 
     OBR.onReady(() => {
-      // 颜色配置
       const COLORS = {
         tag: '#FF9800',
         status: '#8BC34A',
         power: '#9C27B0'
       };
 
-      // DOM 元素
       const tokenNameEl = document.getElementById('token-name');
       const tagsListEl = document.getElementById('tags-list');
       const statusesListEl = document.getElementById('statuses-list');
       const powersListEl = document.getElementById('powers-list');
 
-      // ----- 工具函数 -----
+      // ---------- 工具函数 ----------
       async function getSelectedToken() {
         const selection = await OBR.player.getSelection();
         if (!selection || selection.length === 0) return null;
@@ -86,7 +84,6 @@
         });
       }
 
-      // 状态槽位逻辑
       function addStatusLevel(existingLevels, newLevel) {
         if (newLevel < 1 || newLevel > 7) return null;
         const levels = new Set(existingLevels);
@@ -103,117 +100,74 @@
         return null;
       }
 
-      // 格式化状态文本（用于面板显示）
       function formatStatus(status) {
         const levels = status.levels.slice().sort((a,b) => a-b);
         if (levels.length === 0) return status.name;
         return `${status.name} - [${levels.join(',')}]`;
       }
 
-      // 生成附件文本（用于实际显示在 token 旁）
-      function getAttachmentText(type, data) {
+      function getLabelText(type, data) {
         if (type === 'tag') return data.text;
         if (type === 'power') return `${data.name}-${data.level}`;
-        // 状态：最高级大号，其他小号（通过 HTML 实现）
         if (type === 'status') {
           const levels = data.levels.slice().sort((a,b) => a-b);
           if (levels.length === 0) return data.name;
-          const highest = levels.pop();
-          const lower = levels.join('');
-          let html = `${data.name}-`;
-          if (lower) html += `<span style="font-size:0.7em;opacity:0.6;">${lower}</span>`;
-          html += `<strong>${highest}</strong>`;
-          return html;
+          // 为了标签简单显示，直接列出所有等级
+          return `${data.name} [${levels.join(',')}]`;
         }
         return '';
       }
 
-      // ----- 附件管理 -----
-      // 删除 token 上所有属于我们扩展的附件
-      async function removeAllAttachments(tokenId) {
-        const attachments = await OBR.scene.items.getAttachments(tokenId);
-        for (const att of attachments) {
-          if (att.metadata?.['com.cptyuan.token-labels.attachment']) {
-            await OBR.scene.items.deleteAttachments([att.id]);
-          }
+      // ---------- 标签物品管理 ----------
+      // 删除该 token 下所有我们创建的标签
+      async function removeAllLabelItems(tokenId) {
+        const allItems = await OBR.scene.items.getItems();
+        const ours = allItems.filter(item => 
+          item.parent === tokenId && item.metadata?.['com.cptyuan.token-labels.label']
+        );
+        if (ours.length > 0) {
+          const ids = ours.map(i => i.id);
+          await OBR.scene.items.deleteItems(ids);
         }
       }
 
-      // 根据当前标注数据重建附件
-      async function rebuildAttachments(token) {
-        // 先清除旧附件
-        await removeAllAttachments(token.id);
-        
+      // 根据标注数据重建标签
+      async function rebuildLabelItems(token) {
+        await removeAllLabelItems(token.id);
         const labels = getCustomLabels(token);
-        const attachments = [];
+        const newItems = [];
 
-        // 标签附件
-        for (const tag of labels.tags) {
-          attachments.push({
+        // 辅助函数：添加一个标签
+        const addLabel = (type, data, offsetX, offsetY) => {
+          newItems.push({
             type: 'LABEL',
-            visible: true,
-            text: getAttachmentText('tag', tag),
+            text: getLabelText(type, data),
             style: {
-              backgroundColor: COLORS.tag,
+              backgroundColor: COLORS[type],
               color: '#000',
-              padding: '2px 6px',
-              borderRadius: '4px',
               fontSize: '14px',
-              fontWeight: 'normal',
-              textAlign: 'center'
-            },
-            position: { x: 50, y: -30 }, // 初始位置，可拖动
-            metadata: { 'com.cptyuan.token-labels.attachment': 'tag' }
-          });
-        }
-
-        // 状态附件
-        for (const status of labels.statuses) {
-          attachments.push({
-            type: 'LABEL',
-            visible: true,
-            text: getAttachmentText('status', status),
-            style: {
-              backgroundColor: COLORS.status,
-              color: '#000',
               padding: '2px 6px',
-              borderRadius: '4px',
-              fontSize: '14px',
-              fontWeight: 'normal',
-              textAlign: 'center'
+              borderRadius: '4px'
             },
-            position: { x: -50, y: -30 },
-            metadata: { 'com.cptyuan.token-labels.attachment': 'status' }
+            position: { x: token.position.x + offsetX, y: token.position.y + offsetY },
+            parent: token.id,
+            metadata: { 'com.cptyuan.token-labels.label': type }
           });
-        }
+        };
 
-        // 威能附件
-        for (const power of labels.powers) {
-          attachments.push({
-            type: 'LABEL',
-            visible: true,
-            text: getAttachmentText('power', power),
-            style: {
-              backgroundColor: COLORS.power,
-              color: '#000',
-              padding: '2px 6px',
-              borderRadius: '4px',
-              fontSize: '14px',
-              fontWeight: 'normal',
-              textAlign: 'center'
-            },
-            position: { x: 50, y: 30 },
-            metadata: { 'com.cptyuan.token-labels.attachment': 'power' }
-          });
-        }
+        // 标签：放在右边靠上
+        labels.tags.forEach((tag, i) => addLabel('tag', tag, 60, -20 - i * 25));
+        // 状态：放在左边靠上
+        labels.statuses.forEach((status, i) => addLabel('status', status, -60, -20 - i * 25));
+        // 威能：放在右边靠下
+        labels.powers.forEach((power, i) => addLabel('power', power, 60, 20 + i * 25));
 
-        // 批量创建附件
-        if (attachments.length > 0) {
-          await OBR.scene.items.createAttachments(token.id, attachments);
+        if (newItems.length > 0) {
+          await OBR.scene.items.addItems(newItems);
         }
       }
 
-      // ----- 面板刷新（同时触发附件重建）-----
+      // ---------- 面板刷新 ----------
       async function refreshPanel() {
         const token = await getSelectedToken();
         if (!token) {
@@ -227,7 +181,6 @@
         tokenNameEl.textContent = `📌 ${token.name || '未命名'}`;
         const labels = getCustomLabels(token);
 
-        // 标签列表
         tagsListEl.innerHTML = labels.tags.map((tag, i) => `
           <div class="item">
             <span>${escapeHtml(tag.text)}</span>
@@ -235,7 +188,6 @@
           </div>
         `).join('');
 
-        // 状态列表
         statusesListEl.innerHTML = labels.statuses.map((status, i) => `
           <div class="item">
             <span>${escapeHtml(formatStatus(status))}</span>
@@ -247,7 +199,6 @@
           </div>
         `).join('');
 
-        // 威能列表
         powersListEl.innerHTML = labels.powers.map((power, i) => `
           <div class="item">
             <span>${escapeHtml(power.name)} - ${power.level}</span>
@@ -255,8 +206,8 @@
           </div>
         `).join('');
 
-        // 重建该 token 的附件
-        await rebuildAttachments(token);
+        // 重建标签
+        await rebuildLabelItems(token);
       }
 
       function escapeHtml(text) {
@@ -267,7 +218,6 @@
 
       // ----- 事件处理 -----
       document.body.addEventListener('click', async (e) => {
-        // 删除按钮
         if (e.target.classList.contains('delete-btn')) {
           const type = e.target.dataset.type;
           const index = parseInt(e.target.dataset.index);
@@ -282,7 +232,6 @@
           refreshPanel();
         }
 
-        // 偏移按钮
         if (e.target.classList.contains('offset-btn')) {
           const index = parseInt(e.target.dataset.index);
           const offsetInput = document.getElementById(`offset-${index}`);
@@ -309,7 +258,7 @@
         }
       });
 
-      // 添加标签
+      // 添加按钮
       document.getElementById('add-tag-btn').onclick = async () => {
         const token = await getSelectedToken();
         if (!token) return alert('请先选中一个 token');
@@ -322,7 +271,6 @@
         refreshPanel();
       };
 
-      // 添加状态
       document.getElementById('add-status-btn').onclick = async () => {
         const token = await getSelectedToken();
         if (!token) return alert('请先选中一个 token');
@@ -349,7 +297,6 @@
         refreshPanel();
       };
 
-      // 添加威能
       document.getElementById('add-power-btn').onclick = async () => {
         const token = await getSelectedToken();
         if (!token) return alert('请先选中一个 token');
@@ -364,9 +311,7 @@
         refreshPanel();
       };
 
-      // 监听选中变化
       OBR.player.onChange(refreshPanel);
-      // 初始不刷新，等用户选中
       refreshPanel();
     });
   </script>

@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body {
+      font-family: sans-serif;
+      margin: 10px;
+      background: #2f3437;
+      color: #fff;
+    }
+    .section {
+      margin-bottom: 15px;
+    }
+    .section h3 {
+      margin: 5px 0;
+    }
+    .item {
+      background: #3a3f44;
+      padding: 5px 8px;
+      margin: 4px 0;
+      border-radius: 4px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .delete-btn {
+      background: #d9534f;
+      border: none;
+      color: white;
+      padding: 2px 8px;
+      border-radius: 3px;
+      cursor: pointer;
+    }
+    .add-form {
+      display: flex;
+      gap: 5px;
+      margin-top: 5px;
+    }
+    .add-form input {
+      flex: 1;
+      padding: 4px;
+      border-radius: 3px;
+      border: 1px solid #555;
+      background: #1e1e1e;
+      color: #fff;
+    }
+    .add-form button {
+      background: #5cb85c;
+      border: none;
+      color: white;
+      padding: 4px 10px;
+      border-radius: 3px;
+      cursor: pointer;
+    }
+    .no-token {
+      color: #888;
+      font-style: italic;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="token-name" class="no-token">未选中任何 token</div>
+    
+    <div class="section">
+      <h3>🏷️ 标签</h3>
+      <div id="tags-list"></div>
+      <div class="add-form">
+        <input id="new-tag" placeholder="输入标签文本">
+        <button id="add-tag-btn">添加</button>
+      </div>
+    </div>
+
+    <div class="section">
+      <h3>💚 状态</h3>
+      <div id="statuses-list"></div>
+      <div class="add-form">
+        <input id="new-status-name" placeholder="状态名称">
+        <input id="new-status-level" placeholder="等级" style="width:50px;">
+        <button id="add-status-btn">添加</button>
+      </div>
+    </div>
+
+    <div class="section">
+      <h3>💜 威能</h3>
+      <div id="powers-list"></div>
+      <div class="add-form">
+        <input id="new-power-name" placeholder="威能名称">
+        <input id="new-power-level" placeholder="等级" style="width:50px;">
+        <button id="add-power-btn">添加</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://esm.sh/@owlbear-rodeo/sdk"></script>
+  <script>
+    OBR.onReady(async () => {
+      const tokenNameEl = document.getElementById('token-name');
+      const tagsListEl = document.getElementById('tags-list');
+      const statusesListEl = document.getElementById('statuses-list');
+      const powersListEl = document.getElementById('powers-list');
+
+      async function getSelectedToken() {
+        const selection = await OBR.player.getSelection();
+        if (selection && selection.length === 1) {
+          const item = selection[0];
+          if (item.layer === 'CHARACTER' || item.layer === 'MOUNT') {
+            return item;
+          }
+        }
+        return null;
+      }
+
+      function getCustomLabels(item) {
+        return item.metadata?.['com.cptyuan.token-labels'] || { tags: [], statuses: [], powers: [] };
+      }
+
+      async function saveCustomLabels(item, labels) {
+        await OBR.scene.items.updateItems([item.id], (items) => {
+          items[0].metadata['com.cptyuan.token-labels'] = labels;
+        });
+      }
+
+      async function refreshPanel() {
+        const token = await getSelectedToken();
+        if (!token) {
+          tokenNameEl.textContent = '未选中任何 token';
+          tagsListEl.innerHTML = '';
+          statusesListEl.innerHTML = '';
+          powersListEl.innerHTML = '';
+          return;
+        }
+
+        tokenNameEl.textContent = `📌 ${token.name || token.id}`;
+        const labels = getCustomLabels(token);
+
+        tagsListEl.innerHTML = labels.tags.map((tag, i) => `
+          <div class="item">
+            <span>${tag.text}</span>
+            <button class="delete-btn" data-type="tag" data-index="${i}">删除</button>
+          </div>
+        `).join('');
+
+        statusesListEl.innerHTML = labels.statuses.map((status, i) => `
+          <div class="item">
+            <span>${status.name} - ${status.levels?.join(',') || ''}</span>
+            <button class="delete-btn" data-type="status" data-index="${i}">删除</button>
+          </div>
+        `).join('');
+
+        powersListEl.innerHTML = labels.powers.map((power, i) => `
+          <div class="item">
+            <span>${power.name} - ${power.level}</span>
+            <button class="delete-btn" data-type="power" data-index="${i}">删除</button>
+          </div>
+        `).join('');
+      }
+
+      document.getElementById('add-tag-btn').onclick = async () => {
+        const token = await getSelectedToken();
+        if (!token) return alert('请先选中一个 token');
+        const text = document.getElementById('new-tag').value.trim();
+        if (!text) return;
+        const labels = getCustomLabels(token);
+        labels.tags.push({ id: crypto.randomUUID(), text: text, offsetX: 0, offsetY: 0 });
+        await saveCustomLabels(token, labels);
+        document.getElementById('new-tag').value = '';
+        refreshPanel();
+      };
+
+      document.getElementById('add-status-btn').onclick = async () => {
+        const token = await getSelectedToken();
+        if (!token) return alert('请先选中一个 token');
+        const name = document.getElementById('new-status-name').value.trim();
+        const level = parseInt(document.getElementById('new-status-level').value);
+        if (!name || isNaN(level)) return;
+        const labels = getCustomLabels(token);
+        let existing = labels.statuses.find(s => s.name === name);
+        if (existing) {
+          if (!existing.levels.includes(level)) {
+            existing.levels.push(level);
+            existing.levels.sort((a,b) => a-b);
+          }
+        } else {
+          labels.statuses.push({ id: crypto.randomUUID(), name: name, levels: [level], offsetX: 0, offsetY: 0 });
+        }
+        await saveCustomLabels(token, labels);
+        document.getElementById('new-status-name').value = '';
+        document.getElementById('new-status-level').value = '';
+        refreshPanel();
+      };
+
+      document.getElementById('add-power-btn').onclick = async () => {
+        const token = await getSelectedToken();
+        if (!token) return alert('请先选中一个 token');
+        const name = document.getElementById('new-power-name').value.trim();
+        const level = parseInt(document.getElementById('new-power-level').value);
+        if (!name || isNaN(level)) return;
+        const labels = getCustomLabels(token);
+        labels.powers.push({ id: crypto.randomUUID(), name: name, level: level, offsetX: 0, offsetY: 0 });
+        await saveCustomLabels(token, labels);
+        document.getElementById('new-power-name').value = '';
+        document.getElementById('new-power-level').value = '';
+        refreshPanel();
+      };
+
+      document.body.addEventListener('click', async (e) => {
+        if (e.target.classList.contains('delete-btn')) {
+          const type = e.target.dataset.type;
+          const index = parseInt(e.target.dataset.index);
+          const token = await getSelectedToken();
+          if (!token) return;
+          const labels = getCustomLabels(token);
+          labels[type + 's'].splice(index, 1);
+          await saveCustomLabels(token, labels);
+          refreshPanel();
+        }
+      });
+
+      OBR.player.onChange(refreshPanel);
+      refreshPanel();
+    });
+  </script>
+</body>
+</html>

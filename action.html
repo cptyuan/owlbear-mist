@@ -3,66 +3,20 @@
 <head>
   <meta charset="utf-8">
   <style>
-    body {
-      font-family: sans-serif;
-      margin: 10px;
-      background: #2f3437;
-      color: #fff;
-    }
-    .section {
-      margin-bottom: 15px;
-    }
-    .section h3 {
-      margin: 5px 0;
-    }
-    .item {
-      background: #3a3f44;
-      padding: 5px 8px;
-      margin: 4px 0;
-      border-radius: 4px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-    .delete-btn {
-      background: #d9534f;
-      border: none;
-      color: white;
-      padding: 2px 8px;
-      border-radius: 3px;
-      cursor: pointer;
-    }
-    .add-form {
-      display: flex;
-      gap: 5px;
-      margin-top: 5px;
-    }
-    .add-form input {
-      flex: 1;
-      padding: 4px;
-      border-radius: 3px;
-      border: 1px solid #555;
-      background: #1e1e1e;
-      color: #fff;
-    }
-    .add-form button {
-      background: #5cb85c;
-      border: none;
-      color: white;
-      padding: 4px 10px;
-      border-radius: 3px;
-      cursor: pointer;
-    }
-    .no-token {
-      color: #888;
-      font-style: italic;
-    }
+    body { font-family: sans-serif; margin: 10px; background: #2f3437; color: #fff; }
+    .section { margin-bottom: 15px; }
+    .section h3 { margin: 5px 0; }
+    .item { background: #3a3f44; padding: 5px 8px; margin: 4px 0; border-radius: 4px; display: flex; justify-content: space-between; align-items: center; }
+    .delete-btn { background: #d9534f; border: none; color: white; padding: 2px 8px; border-radius: 3px; cursor: pointer; }
+    .add-form { display: flex; gap: 5px; margin-top: 5px; }
+    .add-form input { flex: 1; padding: 4px; border-radius: 3px; border: 1px solid #555; background: #1e1e1e; color: #fff; }
+    .add-form button { background: #5cb85c; border: none; color: white; padding: 4px 10px; border-radius: 3px; cursor: pointer; }
+    .no-token { color: #888; font-style: italic; }
   </style>
 </head>
 <body>
   <div id="app">
     <div id="token-name" class="no-token">未选中任何 token</div>
-    
     <div class="section">
       <h3>🏷️ 标签</h3>
       <div id="tags-list"></div>
@@ -71,7 +25,6 @@
         <button id="add-tag-btn">添加</button>
       </div>
     </div>
-
     <div class="section">
       <h3>💚 状态</h3>
       <div id="statuses-list"></div>
@@ -81,7 +34,6 @@
         <button id="add-status-btn">添加</button>
       </div>
     </div>
-
     <div class="section">
       <h3>💜 威能</h3>
       <div id="powers-list"></div>
@@ -92,7 +44,6 @@
       </div>
     </div>
   </div>
-
   <script src="https://esm.sh/@owlbear-rodeo/sdk"></script>
   <script>
     OBR.onReady(async () => {
@@ -105,9 +56,7 @@
         const selection = await OBR.player.getSelection();
         if (selection && selection.length === 1) {
           const item = selection[0];
-          if (item.layer === 'CHARACTER' || item.layer === 'MOUNT') {
-            return item;
-          }
+          if (item.layer === 'CHARACTER' || item.layer === 'MOUNT') return item;
         }
         return null;
       }
@@ -131,29 +80,16 @@
           powersListEl.innerHTML = '';
           return;
         }
-
         tokenNameEl.textContent = `📌 ${token.name || token.id}`;
         const labels = getCustomLabels(token);
-
         tagsListEl.innerHTML = labels.tags.map((tag, i) => `
-          <div class="item">
-            <span>${tag.text}</span>
-            <button class="delete-btn" data-type="tag" data-index="${i}">删除</button>
-          </div>
+          <div class="item"><span>${tag.text}</span><button class="delete-btn" data-type="tag" data-index="${i}">删除</button></div>
         `).join('');
-
         statusesListEl.innerHTML = labels.statuses.map((status, i) => `
-          <div class="item">
-            <span>${status.name} - ${status.levels?.join(',') || ''}</span>
-            <button class="delete-btn" data-type="status" data-index="${i}">删除</button>
-          </div>
+          <div class="item"><span>${status.name} - ${status.levels?.join(',') || ''}</span><button class="delete-btn" data-type="status" data-index="${i}">删除</button></div>
         `).join('');
-
         powersListEl.innerHTML = labels.powers.map((power, i) => `
-          <div class="item">
-            <span>${power.name} - ${power.level}</span>
-            <button class="delete-btn" data-type="power" data-index="${i}">删除</button>
-          </div>
+          <div class="item"><span>${power.name} - ${power.level}</span><button class="delete-btn" data-type="power" data-index="${i}">删除</button></div>
         `).join('');
       }
 

@@ -1,6 +1,6 @@
 {
   "name": "token-labels",
-  "version": "1.0.3",
+  "version": "1.0.5",
   "manifest_version": 1,
   "description": "给 token 添加标签、状态和威能",
   "author": "cptyuan",

@@ -1,13 +1,13 @@
 {
   "name": "token-labels",
-  "version": "2.0.4",
+  "version": "2.0.5",
   "manifest_version": 1,
   "description": "给 token 添加标签、状态和威能",
   "author": "cptyuan",
   "action": {
     "title": "Token 标注",
-    "icon": "https://cptyuan.github.io/owlbear-mist/tag.svg?v=2.0.2",
-    "popover": "https://cptyuan.github.io/owlbear-mist/action.html?v=2.0.2",
+    "icon": "https://cptyuan.github.io/owlbear-mist/tag.svg?v=2.0.5",
+    "popover": "https://cptyuan.github.io/owlbear-mist/action.html?v=2.0.5",
     "height": 600,
     "width": 350
   }

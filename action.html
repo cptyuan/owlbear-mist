@@ -53,446 +53,218 @@
   <script type="module">
     import OBR from "https://esm.sh/@owlbear-rodeo/sdk";
 
-    // 颜色配置
-    const COLORS = {
-      tag: '#FF9800',
-      status: '#8BC34A',
-      power: '#9C27B0'
-    };
+    OBR.onReady(() => {
+      const tokenNameEl = document.getElementById('token-name');
+      const tagsListEl = document.getElementById('tags-list');
+      const statusesListEl = document.getElementById('statuses-list');
+      const powersListEl = document.getElementById('powers-list');
 
-    // 存储每个 token 的活跃覆盖层元素
-    const activeOverlays = new Map(); // tokenId -> Map(labelId, HTMLDivElement)
-
-    // DOM 元素
-    const tokenNameEl = document.getElementById('token-name');
-    const tagsListEl = document.getElementById('tags-list');
-    const statusesListEl = document.getElementById('statuses-list');
-    const powersListEl = document.getElementById('powers-list');
-
-    // ---------- 工具函数 ----------
-    async function getSelectedToken() {
-      const selection = await OBR.player.getSelection();
-      if (!selection || selection.length === 0) return null;
-      const items = await OBR.scene.items.getItems(selection);
-      return items?.[items.length - 1] || null;
-    }
-
-    function getCustomLabels(item) {
-      return item?.metadata?.['com.cptyuan.token-labels'] || { tags: [], statuses: [], powers: [] };
-    }
-
-    async function saveCustomLabels(item, labels) {
-      await OBR.scene.items.updateItems([item.id], (items) => {
-        const target = items[0];
-        if (!target) return;
-        if (!target.metadata) target.metadata = {};
-        target.metadata['com.cptyuan.token-labels'] = labels;
-      });
-    }
-
-    function addStatusLevel(existingLevels, newLevel) {
-      if (newLevel < 1 || newLevel > 7) return null;
-      const levels = new Set(existingLevels);
-      if (!levels.has(newLevel)) {
-        levels.add(newLevel);
-        return Array.from(levels).sort((a,b) => a-b);
-      }
-      for (let i = newLevel + 1; i <= 7; i++) {
-        if (!levels.has(i)) {
-          levels.add(i);
-          return Array.from(levels).sort((a,b) => a-b);
-        }
-      }
-      return null;
-    }
-
-    function formatStatus(status) {
-      const levels = status.levels.slice().sort((a,b) => a-b);
-      if (levels.length === 0) return status.name;
-      return `${status.name} - [${levels.join(',')}]`;
-    }
-
-    function getLabelText(type, data) {
-      if (type === 'tag') return data.text;
-      if (type === 'power') return `${data.name}-${data.level}`;
-      if (type === 'status') {
-        const levels = data.levels.slice().sort((a,b) => a-b);
-        if (levels.length === 0) return data.name;
-        const highest = levels[levels.length - 1];
-        const lower = levels.slice(0, -1).join('');
-        let text = `${data.name}-`;
-        if (lower) text += `${lower}`;
-        text += `[${highest}]`; // 简单表示最高级，后续可以优化为大小字效果
-        return text;
-      }
-      return '';
-    }
-
-    // 更新所有已激活覆盖层的位置
-    let canvasContainer = null;
-    async function getCanvasContainer() {
-      if (canvasContainer) return canvasContainer;
-      const canvas = await OBR.scene.canvas.getCanvas();
-      canvasContainer = canvas.parentElement;
-      return canvasContainer;
-    }
-
-    // 根据 token 和标注数量计算标签放置位置（自动布局）
-    function getLabelPosition(index, total, tokenWidth, tokenHeight) {
-      // 将标签放在 token 周围，按顺序排列
-      const positions = [];
-      const offset = 10; // 距离 token 边缘的额外间距
-      // 上方、右方、下方、左方，必要时错开
-      const slots = [
-        { x: 0, y: -tokenHeight/2 - 20 },   // 上
-        { x: tokenWidth/2 + 10, y: 0 },     // 右
-        { x: 0, y: tokenHeight/2 + 10 },    // 下
-        { x: -tokenWidth/2 - 10, y: 0 }     // 左
-      ];
-      // 简单循环分配
-      const base = slots[index % 4];
-      const row = Math.floor(index / 4);
-      const offsetY = row * 25; // 多排时向下偏移
-      return {
-        x: base.x,
-        y: base.y + (base.y > 0 ? offsetY : -offsetY)
-      };
-    }
-
-    // 创建或更新覆盖层 div
-    async function updateOverlay(token, labelId, type, data, visible) {
-      const tokenId = token.id;
-      if (!activeOverlays.has(tokenId)) {
-        activeOverlays.set(tokenId, new Map());
-      }
-      const tokenOverlays = activeOverlays.get(tokenId);
-
-      // 如果不可见，移除已有覆盖层
-      if (!visible) {
-        const existingDiv = tokenOverlays.get(labelId);
-        if (existingDiv) {
-          existingDiv.remove();
-          tokenOverlays.delete(labelId);
-        }
-        return;
+      // ---------- 工具函数 ----------
+      async function getSelectedToken() {
+        const selection = await OBR.player.getSelection();
+        console.log('当前选择:', selection);
+        if (!selection || selection.length === 0) return null;
+        // 取最后一个选中的 token（避免多选时取到第一个）
+        const lastId = selection[selection.length - 1];
+        const items = await OBR.scene.items.getItems([lastId]);
+        return items?.[0] || null;
       }
 
-      // 获取容器
-      const container = await getCanvasContainer();
-      
-      // 准备 div
-      let div = tokenOverlays.get(labelId);
-      if (!div) {
-        div = document.createElement('div');
-        div.style.position = 'absolute';
-        div.style.zIndex = '1000';
-        div.style.padding = '2px 6px';
-        div.style.borderRadius = '4px';
-        div.style.fontSize = '14px';
-        div.style.fontWeight = 'normal';
-        div.style.color = '#000';
-        div.style.pointerEvents = 'auto'; // 允许点击
-        div.style.userSelect = 'none';
-        div.style.whiteSpace = 'nowrap';
-        container.appendChild(div);
-        tokenOverlays.set(labelId, div);
+      function getCustomLabels(item) {
+        return item?.metadata?.['com.cptyuan.token-labels'] || { tags: [], statuses: [], powers: [] };
       }
 
-      // 样式
-      div.style.backgroundColor = COLORS[type];
-      div.textContent = getLabelText(type, data);
-
-      // 获取 token 当前在画布上的位置
-      const viewport = await OBR.scene.viewport.get();
-      const { x: worldX, y: worldY } = token.position;
-      const screenX = (worldX - viewport.offset.x) * viewport.scale + viewport.width / 2;
-      const screenY = (worldY - viewport.offset.y) * viewport.scale + viewport.height / 2;
-      const tokenWidth = token.size.width * viewport.scale;
-      const tokenHeight = token.size.height * viewport.scale;
-
-      // 计算该标注在 token 周围的放置位置（基于当前激活的所有标注）
-      // 这里简化：直接根据该标注在已激活列表中的索引计算
-      // 我们需要知道该标注在所有激活标注中的顺序
-      // 因此，在更新所有覆盖层时统一计算位置
-    }
-
-    // 刷新指定 token 的所有覆盖层
-    async function refreshOverlays(token) {
-      const labels = getCustomLabels(token);
-      const tokenId = token.id;
-
-      // 收集所有需要显示的标注（visible === true）
-      const visibleItems = [];
-      for (const tag of labels.tags) {
-        if (tag.visible) visibleItems.push({ type: 'tag', data: tag, id: tag.id });
-      }
-      for (const status of labels.statuses) {
-        if (status.visible) visibleItems.push({ type: 'status', data: status, id: status.id });
-      }
-      for (const power of labels.powers) {
-        if (power.visible) visibleItems.push({ type: 'power', data: power, id: power.id });
-      }
-
-      // 移除不再可见的覆盖层
-      const tokenOverlays = activeOverlays.get(tokenId) || new Map();
-      for (const [id, div] of tokenOverlays.entries()) {
-        if (!visibleItems.some(item => item.id === id)) {
-          div.remove();
-          tokenOverlays.delete(id);
-        }
-      }
-
-      // 创建或更新可见的覆盖层
-      const container = await getCanvasContainer();
-      const viewport = await OBR.scene.viewport.get();
-      const screenXBase = (token.position.x - viewport.offset.x) * viewport.scale + viewport.width / 2;
-      const screenYBase = (token.position.y - viewport.offset.y) * viewport.scale + viewport.height / 2;
-      const tokenW = token.size.width * viewport.scale;
-      const tokenH = token.size.height * viewport.scale;
-
-      // 按 type 排序，然后分配位置
-      const positions = [];
-      const count = visibleItems.length;
-      // 生成位置数组：右侧上下排列
-      for (let i = 0; i < count; i++) {
-        // 简单排列在 token 右侧，垂直错开
-        const x = tokenW / 2 + 15;
-        const y = -tokenH / 2 + 20 + i * 25;
-        positions.push({ x, y });
-      }
-
-      for (let i = 0; i < visibleItems.length; i++) {
-        const item = visibleItems[i];
-        let div = tokenOverlays.get(item.id);
-        if (!div) {
-          div = document.createElement('div');
-          div.style.position = 'absolute';
-          div.style.zIndex = '1000';
-          div.style.padding = '2px 6px';
-          div.style.borderRadius = '4px';
-          div.style.fontSize = '14px';
-          div.style.fontWeight = 'normal';
-          div.style.color = '#000';
-          div.style.whiteSpace = 'nowrap';
-          div.style.pointerEvents = 'auto';
-          container.appendChild(div);
-          tokenOverlays.set(item.id, div);
-        }
-        div.style.backgroundColor = COLORS[item.type];
-        div.textContent = getLabelText(item.type, item.data);
-        const pos = positions[i];
-        div.style.left = (screenXBase + pos.x) + 'px';
-        div.style.top = (screenYBase + pos.y) + 'px';
-      }
-
-      // 存储更新后的 map
-      activeOverlays.set(tokenId, tokenOverlays);
-    }
-
-    // 移除某 token 的所有覆盖层
-    function removeAllOverlays(tokenId) {
-      const tokenOverlays = activeOverlays.get(tokenId);
-      if (tokenOverlays) {
-        for (const div of tokenOverlays.values()) {
-          div.remove();
-        }
-        activeOverlays.delete(tokenId);
-      }
-    }
-
-    // 监听 viewport 变化，更新所有覆盖层位置
-    let viewportUpdateInterval = null;
-    async function startViewportUpdates() {
-      if (viewportUpdateInterval) return;
-      viewportUpdateInterval = setInterval(async () => {
-        // 获取当前选中的 token
-        const token = await getSelectedToken();
-        if (token && activeOverlays.has(token.id)) {
-          refreshOverlays(token);
-        }
-      }, 100); // 100ms 刷新一次
-    }
-
-    // ---------- 面板刷新（UI 列表）----------
-    async function refreshPanel() {
-      const token = await getSelectedToken();
-      if (!token) {
-        tokenNameEl.textContent = '未选中任何 token（请点选一个角色或坐骑）';
-        tagsListEl.innerHTML = '';
-        statusesListEl.innerHTML = '';
-        powersListEl.innerHTML = '';
-        return;
-      }
-
-      tokenNameEl.textContent = `📌 ${token.name || '未命名'}`;
-      const labels = getCustomLabels(token);
-
-      // 标签列表（带开关）
-      tagsListEl.innerHTML = labels.tags.map((tag, i) => `
-        <div class="item">
-          <button class="toggle-btn ${tag.visible ? 'active' : ''}" data-type="tag" data-index="${i}">${tag.visible ? '👁️' : '❌'}</button>
-          <span>${escapeHtml(tag.text)}</span>
-          <button class="delete-btn" data-type="tag" data-index="${i}">删除</button>
-        </div>
-      `).join('');
-
-      // 状态列表
-      statusesListEl.innerHTML = labels.statuses.map((status, i) => `
-        <div class="item">
-          <button class="toggle-btn ${status.visible ? 'active' : ''}" data-type="status" data-index="${i}">${status.visible ? '👁️' : '❌'}</button>
-          <span>${escapeHtml(formatStatus(status))}</span>
-          <div class="offset-control">
-            <input type="number" id="offset-${i}" value="0" placeholder="-2">
-            <button class="offset-btn" data-index="${i}">偏移</button>
-          </div>
-          <button class="delete-btn" data-type="status" data-index="${i}">删除</button>
-        </div>
-      `).join('');
-
-      // 威能列表
-      powersListEl.innerHTML = labels.powers.map((power, i) => `
-        <div class="item">
-          <button class="toggle-btn ${power.visible ? 'active' : ''}" data-type="power" data-index="${i}">${power.visible ? '👁️' : '❌'}</button>
-          <span>${escapeHtml(power.name)} - ${power.level}</span>
-          <button class="delete-btn" data-type="power" data-index="${i}">删除</button>
-        </div>
-      `).join('');
-
-      // 刷新覆盖层
-      refreshOverlays(token);
-    }
-
-    function escapeHtml(text) {
-      const div = document.createElement('div');
-      div.textContent = text;
-      return div.innerHTML;
-    }
-
-    // ---------- 事件处理 ----------
-    document.body.addEventListener('click', async (e) => {
-      // 开关按钮
-      if (e.target.classList.contains('toggle-btn')) {
-        const type = e.target.dataset.type;
-        const index = parseInt(e.target.dataset.index);
-        const token = await getSelectedToken();
-        if (!token) return;
-        const labels = getCustomLabels(token);
-        const arrayMap = { tag: 'tags', status: 'statuses', power: 'powers' };
-        const arrayName = arrayMap[type];
-        if (!arrayName) return;
-        const item = labels[arrayName][index];
-        if (item) {
-          item.visible = !item.visible;
-          await saveCustomLabels(token, labels);
-          refreshPanel();
-        }
-        return;
-      }
-
-      // 删除按钮
-      if (e.target.classList.contains('delete-btn')) {
-        const type = e.target.dataset.type;
-        const index = parseInt(e.target.dataset.index);
-        const token = await getSelectedToken();
-        if (!token) return;
-        const labels = getCustomLabels(token);
-        const arrayMap = { tag: 'tags', status: 'statuses', power: 'powers' };
-        const arrayName = arrayMap[type];
-        if (!arrayName) return;
-        labels[arrayName].splice(index, 1);
-        await saveCustomLabels(token, labels);
-        refreshPanel();
-        return;
-      }
-
-      // 偏移按钮
-      if (e.target.classList.contains('offset-btn')) {
-        const index = parseInt(e.target.dataset.index);
-        const offsetInput = document.getElementById(`offset-${index}`);
-        const delta = parseInt(offsetInput.value);
-        if (isNaN(delta)) return alert('请输入有效的整数偏移量');
-        const token = await getSelectedToken();
-        if (!token) return;
-        const labels = getCustomLabels(token);
-        const status = labels.statuses[index];
-        if (!status) return;
-        const newLevels = status.levels.map(l => l + delta).filter(l => l >= 1 && l <= 7);
-        if (newLevels.length === 0) {
-          labels.statuses.splice(index, 1);
-        } else {
-          status.levels = [...new Set(newLevels)].sort((a,b) => a-b);
-        }
-        await saveCustomLabels(token, labels);
-        refreshPanel();
-        return;
-      }
-    });
-
-    // 添加按钮
-    document.getElementById('add-tag-btn').onclick = async () => {
-      const token = await getSelectedToken();
-      if (!token) return alert('请先选中一个 token');
-      const text = document.getElementById('new-tag').value.trim();
-      if (!text) return;
-      const labels = getCustomLabels(token);
-      labels.tags.push({ id: crypto.randomUUID(), text: text, visible: false }); // 默认不显示
-      await saveCustomLabels(token, labels);
-      document.getElementById('new-tag').value = '';
-      refreshPanel();
-    };
-
-    document.getElementById('add-status-btn').onclick = async () => {
-      const token = await getSelectedToken();
-      if (!token) return alert('请先选中一个 token');
-      const name = document.getElementById('new-status-name').value.trim();
-      const level = parseInt(document.getElementById('new-status-level').value);
-      if (!name || isNaN(level)) return;
-      const labels = getCustomLabels(token);
-      let existing = labels.statuses.find(s => s.name === name);
-      if (existing) {
-        const newLevels = addStatusLevel(existing.levels, level);
-        if (!newLevels) return alert('槽位已满，无法添加！');
-        existing.levels = newLevels;
-      } else {
-        if (level < 1 || level > 7) return alert('等级必须在 1-7 之间');
-        labels.statuses.push({
-          id: crypto.randomUUID(),
-          name: name,
-          levels: [level],
-          visible: false // 默认不显示
+      async function saveCustomLabels(item, labels) {
+        await OBR.scene.items.updateItems([item.id], (items) => {
+          const target = items[0];
+          if (!target) return;
+          if (!target.metadata) target.metadata = {};
+          target.metadata['com.cptyuan.token-labels'] = labels;
         });
       }
-      await saveCustomLabels(token, labels);
-      document.getElementById('new-status-name').value = '';
-      document.getElementById('new-status-level').value = '';
-      refreshPanel();
-    };
 
-    document.getElementById('add-power-btn').onclick = async () => {
-      const token = await getSelectedToken();
-      if (!token) return alert('请先选中一个 token');
-      const name = document.getElementById('new-power-name').value.trim();
-      const level = parseInt(document.getElementById('new-power-level').value);
-      if (!name || isNaN(level)) return;
-      const labels = getCustomLabels(token);
-      labels.powers.push({ id: crypto.randomUUID(), name: name, level: level, visible: false });
-      await saveCustomLabels(token, labels);
-      document.getElementById('new-power-name').value = '';
-      document.getElementById('new-power-level').value = '';
-      refreshPanel();
-    };
+      function addStatusLevel(existingLevels, newLevel) {
+        if (newLevel < 1 || newLevel > 7) return null;
+        const levels = new Set(existingLevels);
+        if (!levels.has(newLevel)) {
+          levels.add(newLevel);
+          return Array.from(levels).sort((a,b) => a-b);
+        }
+        for (let i = newLevel + 1; i <= 7; i++) {
+          if (!levels.has(i)) {
+            levels.add(i);
+            return Array.from(levels).sort((a,b) => a-b);
+          }
+        }
+        return null;
+      }
 
-    // 初始化
-    OBR.onReady(async () => {
-      // 获取画布容器
-      await getCanvasContainer();
-      // 开始定时更新覆盖层位置
-      startViewportUpdates();
+      function formatStatus(status) {
+        const levels = status.levels.slice().sort((a,b) => a-b);
+        if (levels.length === 0) return status.name;
+        return `${status.name} - [${levels.join(',')}]`;
+      }
 
-      // 监听选中变化
-      OBR.player.onChange(async () => {
-        // 移除旧选中 token 的覆盖层（保留，因为可能有多个 token 已激活覆盖层，我们暂时只管理当前选中 token 的显示，但其他 token 的保留？为简化，我们只显示当前选中 token 的覆盖层，切换时清除旧的）
-        // 简单处理：切换选中时，不删除其他 token 的覆盖层，但需要刷新新 token
+      // ---------- 刷新面板 ----------
+      async function refreshPanel() {
+        console.log('刷新面板...');
+        const token = await getSelectedToken();
+        console.log('当前 token:', token);
+        if (!token) {
+          tokenNameEl.textContent = '未选中任何 token（请点选一个角色或坐骑）';
+          tagsListEl.innerHTML = '';
+          statusesListEl.innerHTML = '';
+          powersListEl.innerHTML = '';
+          return;
+        }
+
+        tokenNameEl.textContent = `📌 ${token.name || '未命名'}`;
+        const labels = getCustomLabels(token);
+
+        tagsListEl.innerHTML = labels.tags.map((tag, i) => `
+          <div class="item">
+            <button class="toggle-btn ${tag.visible ? 'active' : ''}" data-type="tag" data-index="${i}">${tag.visible ? '👁️' : '❌'}</button>
+            <span>${escapeHtml(tag.text)}</span>
+            <button class="delete-btn" data-type="tag" data-index="${i}">删除</button>
+          </div>
+        `).join('');
+
+        statusesListEl.innerHTML = labels.statuses.map((status, i) => `
+          <div class="item">
+            <button class="toggle-btn ${status.visible ? 'active' : ''}" data-type="status" data-index="${i}">${status.visible ? '👁️' : '❌'}</button>
+            <span>${escapeHtml(formatStatus(status))}</span>
+            <div class="offset-control">
+              <input type="number" id="offset-${i}" value="0" placeholder="-2">
+              <button class="offset-btn" data-index="${i}">偏移</button>
+            </div>
+            <button class="delete-btn" data-type="status" data-index="${i}">删除</button>
+          </div>
+        `).join('');
+
+        powersListEl.innerHTML = labels.powers.map((power, i) => `
+          <div class="item">
+            <button class="toggle-btn ${power.visible ? 'active' : ''}" data-type="power" data-index="${i}">${power.visible ? '👁️' : '❌'}</button>
+            <span>${escapeHtml(power.name)} - ${power.level}</span>
+            <button class="delete-btn" data-type="power" data-index="${i}">删除</button>
+          </div>
+        `).join('');
+      }
+
+      function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+      }
+
+      // ---------- 事件处理 ----------
+      document.body.addEventListener('click', async (e) => {
+        if (e.target.classList.contains('toggle-btn')) {
+          const type = e.target.dataset.type;
+          const index = parseInt(e.target.dataset.index);
+          const token = await getSelectedToken();
+          if (!token) return;
+          const labels = getCustomLabels(token);
+          const arrayMap = { tag: 'tags', status: 'statuses', power: 'powers' };
+          const arrayName = arrayMap[type];
+          if (!arrayName) return;
+          const item = labels[arrayName][index];
+          if (item) {
+            item.visible = !item.visible;
+            await saveCustomLabels(token, labels);
+            refreshPanel();
+          }
+          return;
+        }
+
+        if (e.target.classList.contains('delete-btn')) {
+          const type = e.target.dataset.type;
+          const index = parseInt(e.target.dataset.index);
+          const token = await getSelectedToken();
+          if (!token) return;
+          const labels = getCustomLabels(token);
+          const arrayMap = { tag: 'tags', status: 'statuses', power: 'powers' };
+          const arrayName = arrayMap[type];
+          if (!arrayName) return;
+          labels[arrayName].splice(index, 1);
+          await saveCustomLabels(token, labels);
+          refreshPanel();
+          return;
+        }
+
+        if (e.target.classList.contains('offset-btn')) {
+          const index = parseInt(e.target.dataset.index);
+          const offsetInput = document.getElementById(`offset-${index}`);
+          const delta = parseInt(offsetInput.value);
+          if (isNaN(delta)) return alert('请输入有效的整数偏移量');
+          const token = await getSelectedToken();
+          if (!token) return;
+          const labels = getCustomLabels(token);
+          const status = labels.statuses[index];
+          if (!status) return;
+          const newLevels = status.levels.map(l => l + delta).filter(l => l >= 1 && l <= 7);
+          if (newLevels.length === 0) {
+            labels.statuses.splice(index, 1);
+          } else {
+            status.levels = [...new Set(newLevels)].sort((a,b) => a-b);
+          }
+          await saveCustomLabels(token, labels);
+          refreshPanel();
+          return;
+        }
+      });
+
+      // 添加按钮
+      document.getElementById('add-tag-btn').onclick = async () => {
+        const token = await getSelectedToken();
+        if (!token) return alert('请先选中一个 token');
+        const text = document.getElementById('new-tag').value.trim();
+        if (!text) return;
+        const labels = getCustomLabels(token);
+        labels.tags.push({ id: crypto.randomUUID(), text: text, visible: false });
+        await saveCustomLabels(token, labels);
+        document.getElementById('new-tag').value = '';
+        refreshPanel();
+      };
+
+      document.getElementById('add-status-btn').onclick = async () => {
+        const token = await getSelectedToken();
+        if (!token) return alert('请先选中一个 token');
+        const name = document.getElementById('new-status-name').value.trim();
+        const level = parseInt(document.getElementById('new-status-level').value);
+        if (!name || isNaN(level)) return;
+        const labels = getCustomLabels(token);
+        let existing = labels.statuses.find(s => s.name === name);
+        if (existing) {
+          const newLevels = addStatusLevel(existing.levels, level);
+          if (!newLevels) return alert('槽位已满，无法添加！');
+          existing.levels = newLevels;
+        } else {
+          if (level < 1 || level > 7) return alert('等级必须在 1-7 之间');
+          labels.statuses.push({ id: crypto.randomUUID(), name: name, levels: [level], visible: false });
+        }
+        await saveCustomLabels(token, labels);
+        document.getElementById('new-status-name').value = '';
+        document.getElementById('new-status-level').value = '';
+        refreshPanel();
+      };
+
+      document.getElementById('add-power-btn').onclick = async () => {
+        const token = await getSelectedToken();
+        if (!token) return alert('请先选中一个 token');
+        const name = document.getElementById('new-power-name').value.trim();
+        const level = parseInt(document.getElementById('new-power-level').value);
+        if (!name || isNaN(level)) return;
+        const labels = getCustomLabels(token);
+        labels.powers.push({ id: crypto.randomUUID(), name: name, level: level, visible: false });
+        await saveCustomLabels(token, labels);
+        document.getElementById('new-power-name').value = '';
+        document.getElementById('new-power-level').value = '';
+        refreshPanel();
+      };
+
+      // 监听选中变化，立即刷新面板
+      OBR.player.onChange(() => {
+        console.log('选中变化触发');
         refreshPanel();
       });
 

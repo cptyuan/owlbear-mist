@@ -74,7 +74,7 @@
       const selection = await OBR.player.getSelection();
       if (!selection || selection.length === 0) return null;
       const items = await OBR.scene.items.getItems(selection);
-      return items?.[0] || null;
+      return items?.[items.length - 1] || null;
     }
 
     function getCustomLabels(item) {
